@@ -9,6 +9,7 @@ import base64
 from pathlib import Path
 import uuid
 import uvicorn
+import random
 
 # Get the base directory using the current file's location
 BASE_DIR = Path(__file__).resolve().parent
@@ -38,7 +39,10 @@ FILTERS = {
     "brightness": "Increase brightness",
     "contrast": "Increase contrast",
     "invert": "Invert colors",
-    "sepia": "Sepia tone effect"
+    "sepia": "Sepia tone effect",
+    "black_and_white": "Black and White",
+    "vintage": "Vintage",
+    "glitch": "Glitch"
 }
 
 @app.get("/", response_class=HTMLResponse)
@@ -169,6 +173,93 @@ async def api_apply_filter(
                 pixels[px, py] = (tr, tg, tb)
         
         filtered_img = rgb_img
+    elif selected_filter == "black_and_white":
+        # Convert to grayscale and then back to RGB for better control
+        gray_img = img.convert('L')
+        rgb_img = gray_img.convert('RGB')
+        width, height = rgb_img.size
+        pixels = rgb_img.load()
+        
+        for py in range(height):
+            for px in range(width):
+                gray = rgb_img.getpixel((px, py))[0]
+                # Apply threshold for true black and white
+                if gray < 128:
+                    pixels[px, py] = (0, 0, 0)
+                else:
+                    pixels[px, py] = (255, 255, 255)
+        
+        filtered_img = rgb_img
+    elif selected_filter == "vintage":
+        # Convert to RGB mode if it's not already
+        rgb_img = img.convert('RGB')
+        width, height = rgb_img.size
+        pixels = rgb_img.load()
+        
+        for py in range(height):
+            for px in range(width):
+                r, g, b = rgb_img.getpixel((px, py))
+                
+                # Apply vintage effect with warm tones and reduced saturation
+                tr = int(0.393 * r + 0.769 * g + 0.189 * b)
+                tg = int(0.349 * r + 0.686 * g + 0.168 * b)
+                tb = int(0.272 * r + 0.534 * g + 0.131 * b)
+                
+                # Add slight yellow tint
+                tr = min(255, int(tr * 1.1))
+                tg = min(255, int(tg * 1.1))
+                tb = min(255, int(tb * 0.9))
+                
+                # Add slight vignette effect
+                center_x, center_y = width / 2, height / 2
+                distance = ((px - center_x) ** 2 + (py - center_y) ** 2) ** 0.5
+                max_distance = ((width / 2) ** 2 + (height / 2) ** 2) ** 0.5
+                vignette = 1 - (distance / max_distance) * 0.3
+                
+                tr = int(tr * vignette)
+                tg = int(tg * vignette)
+                tb = int(tb * vignette)
+                
+                pixels[px, py] = (tr, tg, tb)
+        
+        filtered_img = rgb_img
+    elif selected_filter == "glitch":
+        # Convert to RGB mode if it's not already
+        rgb_img = img.convert('RGB')
+        width, height = rgb_img.size
+        pixels = rgb_img.load()
+        
+        # Create a copy of the image for manipulation
+        glitch_img = rgb_img.copy()
+        glitch_pixels = glitch_img.load()
+        
+        # Apply random horizontal shifts
+        for y in range(height):
+            if random.random() < 0.1:  # 10% chance of glitch per line
+                shift = random.randint(-20, 20)
+                for x in range(width):
+                    new_x = (x + shift) % width
+                    glitch_pixels[x, y] = pixels[new_x, y]
+        
+        # Apply color channel shifts
+        for y in range(height):
+            if random.random() < 0.05:  # 5% chance of color shift per line
+                r_shift = random.randint(-10, 10)
+                g_shift = random.randint(-10, 10)
+                b_shift = random.randint(-10, 10)
+                
+                for x in range(width):
+                    r, g, b = glitch_pixels[x, y]
+                    new_x = (x + r_shift) % width
+                    r = glitch_pixels[new_x, y][0]
+                    new_x = (x + g_shift) % width
+                    g = glitch_pixels[new_x, y][1]
+                    new_x = (x + b_shift) % width
+                    b = glitch_pixels[new_x, y][2]
+                    
+                    glitch_pixels[x, y] = (r, g, b)
+        
+        filtered_img = glitch_img
     else:
         # No filter or unknown filter
         filtered_img = img
